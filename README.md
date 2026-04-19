@@ -136,8 +136,17 @@ Override with `VITE_SYNC_ENDPOINT` as described above, or see `src/services/sync
 
 ```bash
 npm run lint
+npm run test
 npm run build
 ```
+
+Run unit tests in watch mode during development:
+
+```bash
+npm run test:watch
+```
+
+Tests use [Vitest](https://vitest.dev/) with [Testing Library](https://testing-library.com/react): domain logic in `src/domain/sync/*.test.ts`, UI in `src/components/**/*.test.tsx`.
 
 ## Documentation
 

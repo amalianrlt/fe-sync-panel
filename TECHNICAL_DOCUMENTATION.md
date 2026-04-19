@@ -84,6 +84,7 @@ Integration detail page content is keyed by `integrationId` so state does not bl
 Primary checks:
 
 - `npm run lint`
+- `npm run test` (Vitest: domain tests under `src/domain`, component tests under `src/components` with Testing Library + jsdom)
 - `npm run build`
 
-These validate code quality standards and TypeScript/build integrity.
+These validate code quality standards, domain logic tests, and TypeScript/build integrity.
