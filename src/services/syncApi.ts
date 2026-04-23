@@ -22,16 +22,38 @@ type SyncApiResponse = {
   }
 }
 
-function isApiSyncChange(value: unknown): value is ApiSyncChange {
-  if (!value || typeof value !== 'object') return false
-  const item = value as Partial<ApiSyncChange>
-  return (
-    typeof item.id === 'string' &&
-    typeof item.field_name === 'string' &&
-    (item.change_type === 'CREATE' || item.change_type === 'UPDATE' || item.change_type === 'DELETE') &&
-    typeof item.current_value === 'string' &&
-    typeof item.new_value === 'string'
-  )
+function normalizeApiChangeType(raw: unknown): ApiSyncChange['change_type'] | undefined {
+  if (raw === 'CREATE' || raw === 'ADD') return 'CREATE'
+  if (raw === 'UPDATE') return 'UPDATE'
+  if (raw === 'DELETE') return 'DELETE'
+  if (typeof raw === 'string') {
+    const upper = raw.toUpperCase()
+    if (upper === 'CREATE' || upper === 'ADD') return 'CREATE'
+    if (upper === 'UPDATE') return 'UPDATE'
+    if (upper === 'DELETE') return 'DELETE'
+  }
+  return undefined
+}
+
+/** API may use ADD instead of CREATE; may omit values or send null — normalize to strings. */
+function normalizeApiSyncChange(value: unknown): ApiSyncChange | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const item = value as Partial<ApiSyncChange> & { current_value?: unknown; new_value?: unknown }
+  const changeType = normalizeApiChangeType(item.change_type)
+  if (typeof item.id !== 'string' || typeof item.field_name !== 'string' || !changeType) {
+    return undefined
+  }
+  const cv = item.current_value
+  const nv = item.new_value
+  if (cv != null && typeof cv !== 'string') return undefined
+  if (nv != null && typeof nv !== 'string') return undefined
+  return {
+    id: item.id,
+    field_name: item.field_name,
+    change_type: changeType,
+    current_value: typeof cv === 'string' ? cv : '',
+    new_value: typeof nv === 'string' ? nv : '',
+  }
 }
 
 function parseSyncApiResponse(payload: unknown): SyncApiResponse {
@@ -53,12 +75,17 @@ function parseSyncApiResponse(payload: unknown): SyncApiResponse {
     )
   }
 
-  if (!approval.changes.every(isApiSyncChange)) {
-    throw new SyncApiError(
-      'Invalid sync approval change entries.',
-      'UNKNOWN',
-      'Unexpected sync response format. Please retry.',
-    )
+  const normalizedChanges: ApiSyncChange[] = []
+  for (const raw of approval.changes) {
+    const change = normalizeApiSyncChange(raw)
+    if (!change) {
+      throw new SyncApiError(
+        'Invalid sync approval change entries.',
+        'UNKNOWN',
+        'Unexpected sync response format. Please retry.',
+      )
+    }
+    normalizedChanges.push(change)
   }
 
   return {
@@ -67,7 +94,7 @@ function parseSyncApiResponse(payload: unknown): SyncApiResponse {
     data: {
       sync_approval: {
         application_name: approval.application_name,
-        changes: approval.changes,
+        changes: normalizedChanges,
       },
     },
   }
